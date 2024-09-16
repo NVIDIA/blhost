@@ -20,10 +20,10 @@ APP_NAME = blhost
 # GNU Cross Compiler (No linux lib is available)
 #PREFIX := arm-none-eabi-
 # Linaro Linux-Tageted GNU C Cross Compiler (libudev is not available)
-PREFIX := arm-linux-gnueabi-
+PREFIX := arm-openbmc-linux-gnueabi-
 # Freescale i.MX GNU C Cross Compiler
 #PREFIX := arm-poky-linux-gnueabi-
-#SYSROOT := /opt/fsl-imx-xwayland/5.4-zeus/sysroots/cortexa9t2hf-neon-poky-linux-gnueabi
+SYSROOT := /opt/openbmc/sdk/sysroots/armv7ahf-vfpv4d16-openbmc-linux-gnueabi
 
 ifneq ($(filter X86%, $(shell uname -m | tr a-z A-Z)),)
 # Cross Compiling
@@ -42,7 +42,7 @@ endif
 # Architecture
 # cortex-a9 by default
 #-----------------------------------------------
-CPU ?= cortex-a9
+CPU ?= armv7
 
 #-----------------------------------------------
 # Debug or Release
@@ -86,7 +86,7 @@ SOURCES := $(BOOT_ROOT)/tools/blhost/src/blhost.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/format_string.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/GHSSecInfo.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/GlobMatcher.cpp \
-		   $(BOOT_ROOT)/src/blfwk/src/hid-linux.c \
+		   $(BOOT_ROOT)/src/blfwk/src/hid-usb.c \
 		   $(BOOT_ROOT)/src/blfwk/src/jsoncpp.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/Logging.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/options.cpp \
@@ -135,13 +135,13 @@ endif
 ifneq ($(filter X86%, $(shell uname -m | tr a-z A-Z)),)
 # GNU Cross Compiler
 # Linaro Linux-Tageted GNU C Cross Compiler
-CFLGAS += -mcpu=$(CPU)
-CXXFLGAS += -mcpu=$(CPU)
-LDFLGAS += -mcpu=$(CPU)
+#CFLGAS += -mcpu=$(CPU)
+#CXXFLGAS += -mcpu=$(CPU)
+#LDFLGAS += -mcpu=$(CPU)
 # Freescale i.MX GNU C Cross Compiler
-# CFLGAS += -mfloat-abi=hard -mcpu=$(CPU) --sysroot=$(SYSROOT)
-# CXXFLGAS += -mfloat-abi=hard -mcpu=$(CPU) --sysroot=$(SYSROOT)
-# LDFLGAS += -mfloat-abi=hard -mcpu=$(CPU) --sysroot=$(SYSROOT)
+CFLAGS += -marm -march=armv7-a -mfpu=vfpv4-d16 -mfloat-abi=hard --sysroot=$(SYSROOT)
+CXXFLAGS += -marm -march=armv7-a -mfpu=vfpv4-d16 -mfloat-abi=hard --sysroot=$(SYSROOT)
+LDFLAGS += -marm -march=armv7-a -mfpu=vfpv4-d16 -mfloat-abi=hard --sysroot=$(SYSROOT)
 endif
 
 TARGET_OUTPUT_ROOT := $(OUTPUT_ROOT)/$(DEBUG_OR_RELEASE)
@@ -243,7 +243,7 @@ $(MAKE_TARGET): $(OBJECTS_ALL)
 	@$(call printmessage,link,Linking, $(APP_NAME))
 	$(at)$(LD) $(LDFLAGS) \
           $(OBJECTS_ALL) $(LIBS) \
-          -lc -lstdc++ -lm -ludev \
+          -lc -lstdc++ -lm -lusb-1.0 \
           -o $@
 	@echo "Output binary:" ; echo "  $(APP_NAME)"
 

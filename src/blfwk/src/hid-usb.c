@@ -23,7 +23,7 @@
         http://github.com/signal11/hidapi .
 ********************************************************/
 
-#define _GNU_SOURCE /* needed for wcsdup() before glibc 2.10 */
+//#define _GNU_SOURCE /* needed for wcsdup() before glibc 2.10 */
 
 /* C */
 #include <stdio.h>
@@ -704,7 +704,7 @@ hid_device * hid_open(unsigned short vendor_id, unsigned short product_id, const
 	while (cur_dev) {
 		if (cur_dev->vendor_id == vendor_id &&
 		    cur_dev->product_id == product_id) {
-			if (serial_number) {
+			if (serial_number[0]) {
 				if (cur_dev->serial_number &&
 				    wcscmp(serial_number, cur_dev->serial_number) == 0) {
 					path_to_open = cur_dev->path;
@@ -999,8 +999,7 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 	}
 }
 
-
-int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t length)
+int HID_API_EXPORT hid_write_timeout(hid_device *dev, const unsigned char *data, size_t length, int milliseconds)
 {
 	int res;
 	int report_number = data[0];
@@ -1021,7 +1020,7 @@ int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t 
 			(2/*HID output*/ << 8) | report_number,
 			dev->interface,
 			(unsigned char *)data, length,
-			1000/*timeout millis*/);
+			milliseconds/*timeout millis*/);
 
 		if (res < 0)
 			return -1;
@@ -1038,7 +1037,7 @@ int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t 
 			dev->output_endpoint,
 			(unsigned char*)data,
 			length,
-			&actual_length, 1000);
+			&actual_length, milliseconds);
 
 		if (res < 0)
 			return -1;
@@ -1048,6 +1047,11 @@ int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t 
 
 		return actual_length;
 	}
+}
+
+int HID_API_EXPORT hid_write(hid_device *dev, const unsigned char *data, size_t length)
+{
+	return hid_write_timeout(dev, data, length, 1000);
 }
 
 /* Helper function, to simplify hid_read().

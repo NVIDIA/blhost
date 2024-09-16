@@ -7,6 +7,8 @@
 #if !defined(_ELF_h_)
 #define _ELF_h_
 
+#include <cstdint>
+
 //! \name ELF types
 //! Types used in ELF file structures.
 //@{
