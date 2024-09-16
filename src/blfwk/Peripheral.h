@@ -11,7 +11,9 @@
 
 #include <string.h>
 #include "BusPal.h"
+#if defined(LPCUSBSIO)
 #include "LpcUsbSio.h"
+#endif
 #include "bootloader_common.h"
 
 //! @addtogroup host_peripherals
@@ -57,7 +59,9 @@ public:
         unsigned char spiSequence;
 #endif // #if defined(LINUX) && defined(__ARM__)
         BusPal::BusPalConfigData busPalConfig;
+#if defined(LPCUSBSIO)
         LpcUsbSio::LpcUsbSioConfigData lpcUsbSioConfig;
+#endif
     };
 
     virtual ~Peripheral(){};

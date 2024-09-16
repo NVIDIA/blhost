@@ -854,12 +854,14 @@ int BlHost::processOptions()
         }
     }
 
+#if defined(LPCUSBSIO)
     // Replace the Kinetis Bootloader default VID & PID with the LPC USB Serial I/O VID & PID.
     if (useDefaultUsb && m_useLpcUsbSio)
     {
         m_usbVid = LPCUSBSIO_VID;
         m_usbPid = LPCUSBSIO_PID;
     }
+#endif
     // Treat the rest of the command line as a single bootloader command,
     // possibly with arguments. Allow bus pal to be used without a command argument
     // for things like GPIO configuration

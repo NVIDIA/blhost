@@ -114,13 +114,6 @@ SOURCES := $(BOOT_ROOT)/tools/blhost/src/blhost.cpp \
 		   $(BOOT_ROOT)/src/crc/src/crc16.c \
 		   $(BOOT_ROOT)/src/crc/src/crc32.c 
 
-# LPC USB Serial I/O is not supported by ARM Linux blhost.
-#SOURCES += $(BOOT_ROOT)/src/blfwk/src/LpcUsbSio.cpp \
-		   $(BOOT_ROOT)/src/blfwk/src/LpcUsbSioPeripheral.cpp
-#CFLAGS += -D LPCUSBSIO
-#CXXFLAGS += -D LPCUSBSIO
-#LIBS += $(BOOT_ROOT)/src/middleware/lpcusbsio/bin/arm_linux/lpcusbsio.a
-
 INCLUDES := $(foreach includes, $(INCLUDES), -I $(includes))
 
 ifeq "$(build)" "debug"

@@ -9,7 +9,9 @@
 
 #include "blfwk/Bootloader.h"
 #include "blfwk/BusPalPeripheral.h"
+#if defined(LPCUSBSIO)
 #include "blfwk/LpcUsbSioPeripheral.h"
+#endif
 #include "blfwk/SerialPacketizer.h"
 #include "blfwk/UartPeripheral.h"
 #if defined(LINUX) && defined(__ARM__)
