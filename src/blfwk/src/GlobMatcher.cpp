@@ -2,7 +2,7 @@
  * File:    GlobMatcher.cpp
  *
  * Copyright (c) Freescale Semiconductor, Inc. All rights reserved.
- * See included license file for license details.
+ * See included license file (SW-Content-Register.txt at project root) for license details.
  */
 
 #include "blfwk/GlobMatcher.h"

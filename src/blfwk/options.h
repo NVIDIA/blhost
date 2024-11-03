@@ -15,6 +15,7 @@
 // or supporting this software or for any consequences resulting from the
 // use of this software, no matter how awful, even if they arise from flaws
 // in the software.
+// License: See SW-Content-Register.txt at project root
 // ****************************************************************************
 // ^FILE: options.h - option parsing classes
 //
