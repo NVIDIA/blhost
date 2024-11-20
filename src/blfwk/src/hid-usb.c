@@ -122,6 +122,8 @@ extern "C" {
 #define LOG(...) do {} while (0)
 #endif
 
+HID_API_LOG_LVL hid_api_log_lvl = HID_API_LOG_ERROR;
+
 #ifndef __FreeBSD__
 #define DETACH_KERNEL_DRIVER
 #endif
@@ -477,7 +479,7 @@ err:
 	return str;
 }
 
-static char *make_path(libusb_device *dev, int interface_number)
+static char *make_bus_device_path(libusb_device *dev, int interface_number)
 {
 	char str[64];
 	snprintf(str, sizeof(str), "%04x:%04x:%02x",
@@ -496,8 +498,10 @@ int HID_API_EXPORT hid_init(void)
 		const char *locale;
 
 		/* Init Libusb */
-		if (libusb_init(&usb_context))
+		if (libusb_init(&usb_context)) {
+			ERRORLN("Failed to Initialize LibUSB");
 			return -1;
+		}
 
 		/* Set the locale if it's not set. */
 		locale = setlocale(LC_CTYPE, NULL);
@@ -574,15 +578,19 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 
 							/* Fill out the record */
 							cur_dev->next = NULL;
-							cur_dev->path = make_path(dev, interface_num);
+							cur_dev->path = make_bus_device_path(dev, interface_num);
 
 							res = libusb_open(dev, &handle);
 
 							if (res >= 0) {
 								/* Serial Number */
-								if (desc.iSerialNumber > 0)
+								if (desc.iSerialNumber > 0) {
 									cur_dev->serial_number =
 										get_usb_string(handle, desc.iSerialNumber);
+
+									DEBUG2LN("Opened device with serial %s", cur_dev->serial_number);
+								}
+
 
 								/* Manufacturer and Product strings */
 								if (desc.iManufacturer > 0)
@@ -664,7 +672,9 @@ struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, 
 							/* Release Number */
 							cur_dev->release_number = desc.bcdDevice;
 
-							/* Interface Number */
+							/* Bus Number / Device Address / Interface Number */
+							cur_dev->bus = libusb_get_bus_number(dev),
+							cur_dev->device = libusb_get_device_address(dev),
 							cur_dev->interface_number = interface_num;
 						}
 					}
@@ -693,35 +703,51 @@ void  HID_API_EXPORT hid_free_enumeration(struct hid_device_info *devs)
 	}
 }
 
-hid_device * hid_open(unsigned short vendor_id, unsigned short product_id, const wchar_t *serial_number)
+hid_device * hid_open(const struct hid_device_cfg *cfg)
 {
 	struct hid_device_info *devs, *cur_dev;
 	const char *path_to_open = NULL;
 	hid_device *handle = NULL;
 
-	devs = hid_enumerate(vendor_id, product_id);
+	devs = hid_enumerate(0, 0);
 	cur_dev = devs;
+
 	while (cur_dev) {
-		if (cur_dev->vendor_id == vendor_id &&
-		    cur_dev->product_id == product_id) {
-			if (serial_number[0]) {
-				if (cur_dev->serial_number &&
-				    wcscmp(serial_number, cur_dev->serial_number) == 0) {
-					path_to_open = cur_dev->path;
-					break;
-				}
-			}
-			else {
-				path_to_open = cur_dev->path;
-				break;
+		// For error checking, assume that invalid means it matches by default
+		// (since user did not provide it), otherwise we need to check it before assuming anything
+		int matched_id = (cfg->id.valid) ? 0 : 1;
+		int matched_bdi = (cfg->bdi.valid) ? 0 : 1;
+
+		if (cfg->bdi.valid) {
+			if (cfg->bdi.bus == cur_dev->bus
+				&& cfg->bdi.device == cur_dev->device
+				&& cfg->bdi.interface == cur_dev->interface_number) {
+				DEBUG2LN("Matched device bus:device.interface");
+				matched_bdi = 1;
 			}
 		}
+
+		if (cfg->id.valid) {
+			if (cfg->id.vendor_id == cur_dev->vendor_id && cfg->id.product_id == cur_dev->product_id) {
+				DEBUG2LN("Matched device vendor:product id (bus:device = %04x:%04x)", cur_dev->bus, cur_dev->device);
+				matched_id = 1;
+			}
+		}
+
+
+		if (matched_id && matched_bdi) {
+			path_to_open = cur_dev->path;
+			break;
+		}
+
 		cur_dev = cur_dev->next;
 	}
 
 	if (path_to_open) {
 		/* Open the device */
 		handle = hid_open_path(path_to_open);
+	} else {
+		ERRORLN("Failed to find HID path to open for given USB device");
 	}
 
 	hid_free_enumeration(devs);
@@ -880,25 +906,48 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 	if(hid_init() < 0)
 		return NULL;
 
+	DEBUGLN("Attempting to open `%s` as HID Path", path);
+
 	dev = new_hid_device();
 
 	libusb_get_device_list(usb_context, &devs);
+	int found_device = 0;
 	while ((usb_dev = devs[d++]) != NULL) {
 		struct libusb_device_descriptor desc;
 		struct libusb_config_descriptor *conf_desc = NULL;
 		int i,j,k;
+
+		if (found_device) {
+			break;
+		}
+
 		libusb_get_device_descriptor(usb_dev, &desc);
 
-		if (libusb_get_active_config_descriptor(usb_dev, &conf_desc) < 0)
+		DEBUG2LN(
+			"Found Candidate USB Device (%04x:%04x) (Bus %03x Device %03x)",
+			desc.idVendor,
+			desc.idProduct,
+			libusb_get_bus_number(usb_dev),
+			libusb_get_device_address(usb_dev));
+
+		if (libusb_get_active_config_descriptor(usb_dev, &conf_desc) < 0) {
+			DEBUG2LN("Device doesn't have active config descriptor");
 			continue;
+		}
+
+
 		for (j = 0; j < conf_desc->bNumInterfaces; j++) {
 			const struct libusb_interface *intf = &conf_desc->interface[j];
+
+
 			for (k = 0; k < intf->num_altsetting; k++) {
 				const struct libusb_interface_descriptor *intf_desc;
 				intf_desc = &intf->altsetting[k];
+
 				if (intf_desc->bInterfaceClass == LIBUSB_CLASS_HID) {
-					char *dev_path = make_path(usb_dev, intf_desc->bInterfaceNumber);
+					char *dev_path = make_bus_device_path(usb_dev, intf_desc->bInterfaceNumber);
 					if (!strcmp(dev_path, path)) {
+						DEBUG2LN("Device path matches given path");
 						/* Matched Paths. Open this device */
 
 						/* OPEN HERE */
@@ -913,6 +962,7 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 						/* Detach the kernel driver, but only if the
 						   device is managed by the kernel */
 						if (libusb_kernel_driver_active(dev->device_handle, intf_desc->bInterfaceNumber) == 1) {
+							DEBUG2LN("Detaching kernel driver for device");
 							res = libusb_detach_kernel_driver(dev->device_handle, intf_desc->bInterfaceNumber);
 							if (res < 0) {
 								libusb_close(dev->device_handle);
@@ -977,6 +1027,7 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 						/* Wait here for the read thread to be initialized. */
 						pthread_barrier_wait(&dev->barrier);
 
+						found_device = 1;
 					}
 					free(dev_path);
 				}

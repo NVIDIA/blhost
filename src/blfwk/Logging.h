@@ -164,6 +164,10 @@ public:
     static void info2(const char *fmt, ...);   //!< Log a message with #Logger::kInfo2 level.
     static void debug(const char *fmt, ...);   //!< Log a message with #Logger::kDebug level.
     static void debug2(const char *fmt, ...);  //!< Log a message with #Logger::kDebug2 level.
+
+    #define ERRORLN(fmt, ...) Log::error("ERROR: " fmt "\n", ##__VA_ARGS__)
+    #define DEBUGLN(fmt, ...) Log::debug("DEBUG: " fmt "\n", ##__VA_ARGS__)
+    #define DEBUG2LN(fmt, ...) Log::debug2("DEBUG: " fmt "\n", ##__VA_ARGS__)
     //@}
 
 protected:

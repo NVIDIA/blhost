@@ -42,8 +42,51 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef enum {
+    HID_API_LOG_ERROR = 0,
+    HID_API_LOG_DEBUG,
+    HID_API_LOG_DEBUG2,
+} HID_API_LOG_LVL;
+
+extern HID_API_LOG_LVL hid_api_log_lvl;
+
+#define HID_API_LOG(prefix, lvl, fmt, ...)                                      \
+do {																			\
+	if ((lvl) <= hid_api_log_lvl) {												\
+		printf(prefix ": (HID API) " fmt "\n", ##__VA_ARGS__);					\
+	}																			\
+} while(0)
+
+
+// Use the logger where possible
+#ifndef DEBUG2LN
+
+#define ERRORLN(fmt, ...) HID_API_LOG("ERROR", HID_API_LOG_ERROR, fmt, ##__VA_ARGS__)
+#define DEBUGLN(fmt, ...) HID_API_LOG("DEBUG", HID_API_LOG_DEBUG, fmt, ##__VA_ARGS__)
+#define DEBUG2LN(fmt, ...) HID_API_LOG("DEBUG", HID_API_LOG_DEBUG2, fmt, ##__VA_ARGS__)
+
+#endif
+
+
 struct hid_device_;
 typedef struct hid_device_ hid_device; /**< opaque hidapi structure */
+
+
+struct hid_device_cfg {
+    struct {
+        uint8_t bus;
+        uint8_t device;
+        uint8_t interface;
+        int valid;
+    } bdi;
+
+    struct {
+        uint16_t vendor_id;
+        uint16_t product_id;
+        int valid;
+    } id;
+};
 
 /** hidapi info structure */
 struct hid_device_info
@@ -69,6 +112,10 @@ struct hid_device_info
     /** Usage for this Device/Interface
         (Windows/Mac only).*/
     unsigned short usage;
+
+    uint8_t bus;
+    uint8_t device;
+
     /** The USB interface which this logical device
         represents. Valid on both Linux implementations
         in all cases, and valid on the Windows implementation
@@ -157,9 +204,9 @@ void HID_API_EXPORT HID_API_CALL hid_free_enumeration(struct hid_device_info *de
         This function returns a pointer to a #hid_device object on
         success or NULL on failure.
 */
-HID_API_EXPORT hid_device *HID_API_CALL hid_open(unsigned short vendor_id,
-                                                 unsigned short product_id,
-                                                 const wchar_t *serial_number);
+HID_API_EXPORT hid_device *HID_API_CALL hid_open(const struct hid_device_cfg *cfg);
+
+
 
 /** @brief Open a HID device by its path name.
 

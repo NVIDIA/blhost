@@ -9,6 +9,8 @@
 #ifndef _Peripheral_h_
 #define _Peripheral_h_
 
+#include <sstream>
+#include <string>
 #include <string.h>
 #include "BusPal.h"
 #if defined(LPCUSBSIO)
@@ -16,8 +18,66 @@
 #endif
 #include "bootloader_common.h"
 
+#include "blfwk/utils.h"
+
 //! @addtogroup host_peripherals
 //! @{
+
+namespace nv {
+// bus:device.interface representation
+struct NV_UsbBDI {
+    uint8_t bus;
+    uint8_t device;
+    uint8_t interface = 0;
+    bool valid = false; // no std::optional :(
+
+    std::string formatted() const {
+        constexpr size_t len = sizeof("xxxx:xxxx.xx");
+        char cstr[len];
+
+        snprintf(cstr, len, "%04x:%04x.%02x", bus, device, interface);
+        return std::string{cstr};
+    }
+};
+
+// vendor_id:product_id
+struct NV_UsbID {
+    uint16_t vendor_id;
+    uint16_t product_id;
+    bool valid = false;
+
+    std::string formatted() const {
+        constexpr size_t len = sizeof("xxxx:xxxx");
+        char cstr[len];
+
+        snprintf(cstr, len, "%04x:%04x", vendor_id, product_id);
+
+        return std::string{cstr};
+    }
+};
+
+struct UsbPeripheralConfigData {
+    NV_UsbBDI bdi;
+    NV_UsbID usb_id;
+
+    std::string formatted() const {
+        std::stringstream sstream;
+
+        sstream << "USB Info: ";
+        if (bdi.valid) {
+            sstream << "bus:device.interface = " << bdi.formatted();
+        }
+
+        if (usb_id.valid) {
+            if (bdi.valid) sstream << ", ";
+            sstream << "vendor:device = " << usb_id.formatted();
+        }
+
+        return sstream.str();
+    }
+};
+
+} // namespace nv
 
 namespace blfwk
 {
@@ -41,6 +101,7 @@ public:
         kHostPeripheralType_SPI,
     };
 
+    // Why is this defined within Peripheral???? makes no sense...
     struct PeripheralConfigData
     {
         _host_peripheral_types peripheralType;
@@ -48,10 +109,7 @@ public:
         std::string comPortName;
         long comPortSpeed;
         uint32_t packetTimeoutMs;
-        unsigned short usbHidVid;
-        unsigned short usbHidPid;
-        std::string usbHidSerialNumber;
-        std::string usbPath;
+        nv::UsbPeripheralConfigData usb_cfg;
 #if defined(LINUX) && defined(__ARM__)
         unsigned char i2cAddress;
         unsigned char spiPolarity;
@@ -62,6 +120,24 @@ public:
 #if defined(LPCUSBSIO)
         LpcUsbSio::LpcUsbSioConfigData lpcUsbSioConfig;
 #endif
+
+        std::string str() const {
+            std::string str{"PeripheralConfigData"};
+
+            switch (this->peripheralType) {
+            case _host_peripheral_types::kHostPeripheralType_USB_HID: {
+                std::stringstream stream;
+                stream << "(" << this->usb_cfg.formatted() << ")";
+                str.append(stream.str());
+            }
+                break;
+            default:
+                break;
+            }
+
+            return str;
+        }
+
     };
 
     virtual ~Peripheral(){};
