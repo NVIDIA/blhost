@@ -65,6 +65,9 @@ Bootloader::Bootloader(const Peripheral::PeripheralConfigData &config)
         Log::setLogger(this->m_logger);
     }
 
+
+    DEBUGLN("Creating Bootloader with config %s", config.str().c_str());
+
     switch (config.peripheralType)
     {
         case Peripheral::kHostPeripheralType_UART:
@@ -94,8 +97,7 @@ Bootloader::Bootloader(const Peripheral::PeripheralConfigData &config)
             UsbHidPeripheral *peripheral = NULL;
             try
             {
-                peripheral = new UsbHidPeripheral(config.usbHidVid, config.usbHidPid, config.usbHidSerialNumber.c_str(),
-                                                  config.usbPath.c_str());
+                peripheral = new UsbHidPeripheral(config.usb_cfg);
                 m_hostPacketizer = new UsbHidPacketizer(peripheral, config.packetTimeoutMs);
             }
             catch (...)

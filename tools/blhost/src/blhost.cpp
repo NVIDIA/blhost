@@ -48,7 +48,9 @@ static const char *k_optionsDefinition[] = { "?|help",
                                              "i2c[,<address>,<speed>] | can[,<speed>,<txid>,<rxid>] | sai[,<speed>]",
                                              "l:lpcusbsio spi[,<port>,<pin>,<speed>,<polarity>,<phase>] | "
                                              "i2c[,<address>,<speed>]",
-                                             "u?usb [[[<vid>,]<pid>] | [<path>]]",
+                                             "u?usb DEPRECATED",
+                                             "\b:usb-bus-device <bus>:<device>[.<interface>]",
+                                             "\a:usb-id [<vid>] [,|:] [<pid>]",
                                              "V|verbose",
                                              "d|debug",
                                              "j|json",
@@ -110,11 +112,18 @@ const char k_optionUsage[] =
                                       (default=100,1,1)\n\
                                  i2c: address(7-bit hex), speed(KHz)\n\
                                       (default=0x10,100)\n\
-  -u/--usb [[[<vid>,]<pid>] | [<path>]]\n\
-                               Connect to target over USB HID device denoted by\n\
-                               vid/pid (default=0x15a2,0x0073) or device path.\n\
-                               If -l, then port is LPC USB Serial I/O port\n\
-                               (default=0x1fc9,0x0009), and <path> is ignored.\n\
+  -u/--usb DEPRECATED\n\
+  --usb-id <vendor_id>[,:]<product_id>\n\
+                               Connect to a target over USB HID, denoted by\n\
+                               vendor_id/product_id. If there are multiple devices\n\
+                               with the same vid:pid, looks for --usb-bus-device, \n\
+                               otherwise, picks the firt device encountered.\n\
+  --usb-bus-device <bus>:<device>[.<interface>]\n\
+                               Connect to a target over USB HID, denoted by\n\
+                               bus,device number. Optionally, accepts interface as\n\
+                               well, since our target MCUs use 0. Can be combined\n\
+                               with --usb-id option to ensure that the target device\n\
+                               has the correct vendor/product ID.\n\
   -V/--verbose                 Print extra detailed log information\n\
   -d/--debug                   Print really detailed log information\n\
   -j/--json                    Print output in JSON format to aid automation.\n\
@@ -342,7 +351,6 @@ public:
         , m_useLpcUsbSio(false)
         , m_busPalConfig()
         , m_logger(NULL)
-        , m_useUsb(false)
         , m_useUart(false)
 #if defined(LINUX) && defined(__ARM__)
         , m_useI2c(false)
@@ -352,8 +360,6 @@ public:
         , m_spiPhase(1)
         , m_spiSequence(0)
 #endif
-        , m_usbVid(UsbHidPeripheral::kDefault_Vid)
-        , m_usbPid(UsbHidPeripheral::kDefault_Pid)
         , m_packetTimeoutMs(5000)
         , m_ping(true)
     {
@@ -397,7 +403,6 @@ protected:
     string_vector_t m_busPalConfig;    //!< Bus pal peripheral-specific argument vector.
     bool m_useLpcUsbSio;               //!< True if using LPCUSB Serial I/O peripheral.
     string_vector_t m_lpcUsbSioConfig; //!< LPCUSB Serial I/O peripheral-specific argument vector.
-    bool m_useUsb;                     //!< Connect over USB HID.
     bool m_useUart;                    //!< Connect over UART.
 #if defined(LINUX) && defined(__ARM__)
     bool m_useI2c;         //!< Connect over I2C.
@@ -407,13 +412,18 @@ protected:
     uint8_t m_spiPhase;    //!< SPI clock phase.
     uint8_t m_spiSequence; //!< SPI byte sequence.
 #endif
-    uint16_t m_usbVid;              //!< USB VID of the target HID device
-    uint16_t m_usbPid;              //!< USB PID of the target HID device
-    string m_usbPath;               //!< USB PATH of the target HID device
     bool m_ping;                    //!< If true will not send the initial ping to a serial device
     uint32_t m_packetTimeoutMs;     //!< Packet timeout in milliseconds.
     ping_response_t m_pingResponse; //!< Response to initial ping
     StdoutLogger *m_logger;         //!< Singleton logger instance.
+
+    nv::UsbPeripheralConfigData usb_cfg;
+    bool use_usb() {
+        return usb_cfg.bdi.valid || usb_cfg.usb_id.valid;
+    }
+
+    status_t process_usb_id_option(const char* arg);
+    status_t process_usb_bus_dev_option(const char* arg);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -465,6 +475,76 @@ void BlHost::displayProgress(int percentage, int segmentIndex, int segmentCount)
     }
 }
 
+status_t BlHost::process_usb_id_option(const char* optarg) {
+    if (optarg == NULL) {
+        return STATUS_ERROR;
+    }
+
+    std::string vidstr;
+    std::string pidstr;
+    if (!nv_utils::capture_vendor_product_id(std::string{optarg}, vidstr, pidstr)) {
+        ERRORLN("--usb-id expected format is <vendor_id>:<product_id>.\n\tA comma can be used as separator, and IDs are hex literals with optional 0x prefix.");
+        return STATUS_ERROR;
+    }
+
+    nv::NV_UsbID& usb_id = this->usb_cfg.usb_id;
+
+    if (!nv_utils::str_to_uint<uint16_t>(vidstr, usb_id.vendor_id, 16)) {
+        ERRORLN("Failed to parse USB vendor ID: `%s`", vidstr);
+        return STATUS_ERROR; // WHY IS 0 error????
+    }
+
+    if (!nv_utils::str_to_uint<uint16_t>(pidstr, usb_id.product_id, 16)) {
+        ERRORLN("Failed to parse USB product ID: `%s`", pidstr);
+        return STATUS_ERROR;
+    }
+
+    DEBUGLN("Processed USB ID as %s", usb_id.formatted().c_str());
+
+    usb_id.valid = true;
+    return STATUS_OK;
+}
+
+status_t BlHost::process_usb_bus_dev_option(const char* optarg) {
+    if (optarg == NULL) {
+        return STATUS_ERROR;
+    }
+
+    std::string busstr;
+    std::string devstr;
+    std::string ifstr;
+
+    if (!nv_utils::capture_bus_device_interface(std::string{optarg}, busstr, devstr, ifstr)) {
+        ERRORLN("--usb-bus-device expected format is <bus>:<device>[.<iface>]\n\tIDs are hexadecimal literals. Separators must match exactly.");
+        return STATUS_ERROR;
+    }
+
+    nv::NV_UsbBDI& bdi = this->usb_cfg.bdi;
+
+    if (!nv_utils::str_to_uint<uint8_t>(busstr, bdi.bus, 16)) {
+        ERRORLN("Failed to parse USB bus: `%s", busstr);
+        return STATUS_ERROR;
+    }
+
+    if (!nv_utils::str_to_uint<uint8_t>(devstr, bdi.device, 16)) {
+        ERRORLN("Failed to parse USB device number: `%s", devstr);
+        return STATUS_ERROR;
+    }
+
+    // default to 0 for interface (MCUs have 1 interface)
+    bdi.interface = 0;
+    if (!ifstr.empty() && !nv_utils::str_to_uint<uint8_t>(ifstr, bdi.interface, 16)) {
+        ERRORLN("Failed to parse USB interface: `%s", ifstr);
+        // it's optional, but if we failed to convert to int after it was provided, still bad
+        return STATUS_ERROR;
+    }
+
+    DEBUGLN("Processed USB bus:device.interface as %s", bdi.formatted().c_str());
+
+    bdi.valid = true;
+    return STATUS_OK;
+}
+
 int BlHost::processOptions()
 {
     Options options(*m_argv, k_optionsDefinition);
@@ -497,14 +577,36 @@ int BlHost::processOptions()
                 return 0;
                 break;
 
+            case '\b':
+            {
+                if (this->process_usb_bus_dev_option(optarg) == STATUS_ERROR) {
+                    return STATUS_ERROR;
+                }
+                break;
+            }
+
+            case '\a':
+            {
+                if (this->process_usb_id_option(optarg) == STATUS_ERROR) {
+                    return STATUS_ERROR;
+                }
+                break;
+            }
+
+            case 'u':
+            {
+                ERRORLN("The --usb option is deprecated. Use --usb-bus-device or --usb-id instead.");
+                return 0;
+            }
+
             case 'p':
             {
 #if defined(LINUX) && defined(__ARM__)
-                if (m_useUsb || m_useI2c || m_useSpi || m_useLpcUsbSio)
+                if (m_useI2c || m_useSpi || m_useLpcUsbSio)
                 {
                     Log::error("Error: You cannot specify -p with -u, -i, -s and/or -l option(s).\n");
 #else
-                if (m_useUsb || m_useLpcUsbSio)
+                if (m_useLpcUsbSio)
                 {
                     Log::error("Error: You cannot specify -p with -u and/or -l option(s).\n");
 #endif
@@ -588,11 +690,11 @@ int BlHost::processOptions()
                     options.usage(std::cout, usageTrailer);
                     return 0;
                 }
-                /* LPC USB Serial I/O uses USB-HID. So USB is still selected even when '-u' is not specified,*/
-                if (!m_useUsb)
-                {
-                    m_useUsb = true;
-                }
+                // /* LPC USB Serial I/O uses USB-HID. So USB is still selected even when '-u' is not specified,*/
+                // if (!m_useUsb)
+                // {
+                //     m_useUsb = true;
+                // }
                 if (optarg)
                 {
                     m_lpcUsbSioConfig = utils::string_split(optarg, ',');
@@ -612,86 +714,10 @@ int BlHost::processOptions()
 #endif // #if defined(LPCUSBSIO)
                 break;
             }
-            case 'u':
-            {
-#if defined(LINUX) && defined(__ARM__)
-                if (m_useUart || m_useI2c || m_useSpi)
-                {
-                    Log::error("Error: You cannot specify -u with -p, -i and/or -s option(s).\n");
-#else
-                if (m_useUart)
-                {
-                    Log::error("Error: You cannot specify -u with -p option.\n");
-#endif
-                    options.usage(std::cout, usageTrailer);
-                    return 0;
-                }
-                if (optarg)
-                {
-                    string_vector_t params = utils::string_split(optarg, ',');
-                    uint32_t tempId = 0;
-                    bool useDefaultVid = true;
-                    bool useDefaultPid = true;
-                    uint16_t vid = 0, pid = 0;
-                    string path;
-                    if (params.size() == 1)
-                    {
-                        if (utils::stringtoui(params[0].c_str(), tempId) && tempId < 0x00010000)
-                        {
-                            pid = (uint16_t)tempId;
-                            useDefaultPid = false;
-                        }
-                        else
-                        {
-                            path = params[0];
-                        }
-                    }
-                    else if (params.size() == 2)
-                    {
-                        if (utils::stringtoui(params[0].c_str(), tempId) && tempId < 0x00010000)
-                        {
-                            vid = (uint16_t)tempId;
-                            useDefaultVid = false;
-                        }
-                        else
-                        {
-                            Log::error("Error: %s is not valid vid for option -u.\n", params[0].c_str());
-                            options.usage(std::cout, usageTrailer);
-                            return 0;
-                        }
-                        if (utils::stringtoui(params[1].c_str(), tempId) && tempId < 0x00010000)
-                        {
-                            pid = (uint16_t)tempId;
-                            useDefaultPid = false;
-                        }
-                        else
-                        {
-                            Log::error("Error: %s is not valid pid for option -u.\n", params[1].c_str());
-                            options.usage(std::cout, usageTrailer);
-                            return 0;
-                        }
-                    }
-                    if (!useDefaultPid || !useDefaultVid)
-                    {
-                        useDefaultUsb = false;
-                    }
-                    if (!useDefaultPid)
-                    {
-                        m_usbPid = pid;
-                    }
-                    if (!useDefaultVid)
-                    {
-                        m_usbVid = vid;
-                    }
-                    m_usbPath = path;
-                }
-                m_useUsb = true;
-                break;
-            }
             case 'i':
             {
 #if defined(LINUX) && defined(__ARM__)
-                if (m_useUart || m_useUsb || m_useSpi || m_useBusPal || m_useLpcUsbSio)
+                if (m_useUart || m_useSpi || m_useBusPal || m_useLpcUsbSio)
                 {
                     Log::error("Error: You cannot specify -i with -p, -u, -s, -b and/or -l option(s).\n");
                     options.usage(std::cout, usageTrailer);
@@ -754,7 +780,7 @@ int BlHost::processOptions()
             case 's':
             {
 #if defined(LINUX) && defined(__ARM__)
-                if (m_useUart || m_useUsb || m_useI2c || m_useBusPal || m_useLpcUsbSio)
+                if (m_useUart || m_useI2c || m_useBusPal || m_useLpcUsbSio)
                 {
                     Log::error("Error: You cannot specify -s with -p, -u, -i, -b and/or -l option(s).\n");
                     options.usage(std::cout, usageTrailer);
@@ -816,8 +842,15 @@ int BlHost::processOptions()
                 break;
             }
             case 'V':
-                Log::getLogger()->setFilterLevel(Logger::kDebug);
+            {
+                auto logger = Log::getLogger();
+                // Don't override -d (more verbose logging option)
+                if (logger->getFilterLevel() < Logger::kDebug) {
+                    logger->setFilterLevel(Logger::kDebug);
+                }
+
                 break;
+            }
 
             case 'd':
                 Log::getLogger()->setFilterLevel(Logger::kDebug2);
@@ -865,11 +898,16 @@ int BlHost::processOptions()
     // Treat the rest of the command line as a single bootloader command,
     // possibly with arguments. Allow bus pal to be used without a command argument
     // for things like GPIO configuration
-    if (iter.index() == m_argc && !m_useBusPal)
-    {
-        options.usage(std::cout, usageTrailer);
-        printUsage();
-        return 0;
+    if (iter.index() == m_argc) {
+        if (this->use_usb()) {
+            ERRORLN("Must specify command to use with USB device");
+            options.usage(std::cout, usageTrailer);
+            return 0;
+        } else if (!m_useBusPal) {
+            options.usage(std::cout, usageTrailer);
+            printUsage();
+            return 0;
+        }
     }
 
     // Save command name and arguments.
@@ -921,60 +959,11 @@ int BlHost::run()
 
         config.ping = m_ping;
 
-        if (m_useUsb)
+        if (this->use_usb())
         {
             config.peripheralType = Peripheral::kHostPeripheralType_USB_HID;
-            config.usbHidVid = m_usbVid;
-            config.usbHidPid = m_usbPid;
-            config.usbPath = m_usbPath;
+            config.usb_cfg = this->usb_cfg;
             config.packetTimeoutMs = m_packetTimeoutMs;
-            if (m_useBusPal)
-            {
-                if (!BusPal::parse(m_busPalConfig, config.busPalConfig))
-                {
-                    std::string msg =
-                        format_string("Error: %s is not valid for option -b/--buspal.\n", m_busPalConfig[0].c_str());
-                    throw std::runtime_error(msg);
-                }
-
-                // Check for any passed commands and validate command.
-                configCmd = Command::create(&m_busPalConfig);
-                if (!configCmd)
-                {
-                    std::string msg =
-                        format_string("Error: invalid command or arguments '%s", m_busPalConfig.at(0).c_str());
-                    string_vector_t::iterator it = m_busPalConfig.begin();
-                    for (++it; it != m_busPalConfig.end(); ++it)
-                    {
-                        msg.append(format_string(" %s", (*it).c_str()));
-                    }
-                    msg.append("'\n");
-                    throw std::runtime_error(msg);
-                }
-            }
-#if defined(LPCUSBSIO)
-            else if (m_useLpcUsbSio)
-            {
-                config.peripheralType = Peripheral::kHostPeripheralType_LPCUSBSIO;
-                config.lpcUsbSioConfig.portConfig.usbVid = m_usbVid;
-                config.lpcUsbSioConfig.portConfig.usbPid = m_usbPid;
-                // USB string number and USB instance path are not supported by current LPC USB Serial I/O.
-                // config.lpcUsbSioConfig.usbString = ;
-                // config.lpcUsbSioConfig.usbPath = m_usbPath;
-                if (!LpcUsbSio::parse(m_lpcUsbSioConfig, config.lpcUsbSioConfig))
-                {
-                    std::string msg = format_string("Error: %s is not valid for option -l/--lpcusbsio.\n",
-                                                    m_lpcUsbSioConfig[0].c_str());
-                    string_vector_t::iterator it = m_lpcUsbSioConfig.begin();
-                    for (++it; it != m_lpcUsbSioConfig.end(); ++it)
-                    {
-                        msg.append(format_string(" %s", (*it).c_str()));
-                    }
-                    msg.append("'\n");
-                    throw std::runtime_error(msg);
-                }
-            }
-#endif // #if defined(LPCUSBSIO)
         }
 #if defined(LINUX) && defined(__ARM__)
         else if (m_useI2c)

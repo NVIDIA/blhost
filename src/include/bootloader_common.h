@@ -169,6 +169,9 @@ enum _sbloader_status
 /*! @brief Type used for all status and error return values. */
 typedef int32_t status_t;
 
+#define STATUS_OK -1
+#define STATUS_ERROR 0 // WHYYYYY :(
+
 #ifndef NULL
 #define NULL 0
 #endif

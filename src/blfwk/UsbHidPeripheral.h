@@ -34,17 +34,7 @@ public:
     };
 
 public:
-    //! @brief Default constructor.
-    //!
-    //! Uses vendor_id = kDefault_Vid and product_id = kDefault_Pid.
-    UsbHidPeripheral();
-
-    //! @brief Parameterized constructor.
-    //!
-    //! @param vendor_id The Vendor ID of the USB HID device.
-    //! @param product_id The Product ID of the USB HID device.
-    //! @param serial_number The Serial Number of the USB HID device.
-    UsbHidPeripheral(unsigned short vendor_id, unsigned short product_id, const char *serial_number, const char *path);
+    UsbHidPeripheral(const nv::UsbPeripheralConfigData& cfg);
 
     //! @brief Destructor.
     virtual ~UsbHidPeripheral();
@@ -71,23 +61,14 @@ public:
     //! @param byteCount Number of bytes to write
     //! @param timeoutMs Time in milliseconds to wait for write to complete.
     status_t write(const uint8_t *buffer, uint32_t byteCount, uint32_t timeoutMS);
-
-    //! @brief Return USB Vendor ID
-    unsigned short getVendorId() { return m_vendor_id; }
-    //! @brief Return USB Product ID
-    unsigned short getProductId() { return m_product_id; }
-    //! @brief Return USB Serial Number
-    const wchar_t *getSerialNumber() { return m_serial_number.c_str(); }
 private:
     //! @brief Initialize.
     //!
     //! Opens the HID device.
     bool init();
 
-    unsigned short m_vendor_id;
-    unsigned short m_product_id;
-    std::wstring m_serial_number;
-    std::string m_path;
+
+    nv::UsbPeripheralConfigData cfg;
     hid_device *m_device; //!< Device handle.
 };
 

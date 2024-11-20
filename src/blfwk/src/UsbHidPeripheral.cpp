@@ -6,6 +6,7 @@
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
+#include <unordered_map>
 
 #include "blfwk/UsbHidPeripheral.h"
 #include "blfwk/format_string.h"
@@ -20,87 +21,40 @@ using namespace blfwk;
 // Code
 ////////////////////////////////////////////////////////////////////////////////
 
-// See UsbHidPeripheral.h for documentation of this method.
-UsbHidPeripheral::UsbHidPeripheral()
-    : m_vendor_id(kDefault_Vid)
-    , m_product_id(kDefault_Pid)
-    , m_path("")
-{
-    if (!init())
-    {
-        throw std::runtime_error(
-            format_string("Error: UsbHidPeripheral() cannot open USB HID device (vid=0x%04x, pid=0x%04x).", m_vendor_id,
-                          m_product_id));
-    }
-}
+UsbHidPeripheral::UsbHidPeripheral(const nv::UsbPeripheralConfigData& cfg) : cfg(cfg) {
+    const std::unordered_map<Logger::log_level_t, HID_API_LOG_LVL> blhost2hid_log_levels{
+        {Logger::log_level_t::kError, HID_API_LOG_ERROR},
+        {Logger::log_level_t::kDebug, HID_API_LOG_DEBUG},
+        {Logger::log_level_t::kDebug2, HID_API_LOG_DEBUG2},
+    };
+    const auto blhostlvl = Log::getLogger()->getFilterLevel();
 
-// See UsbHidPeripheral.h for documentation of this method.
-UsbHidPeripheral::UsbHidPeripheral(unsigned short vendor_id,
-                                   unsigned short product_id,
-                                   const char *serial_number,
-                                   const char *path)
-    : m_vendor_id(vendor_id)
-    , m_product_id(product_id)
-    , m_path(path)
-{
-    // Convert to a wchar_t*
-    std::string s(serial_number);
-    m_serial_number.assign(s.begin(), s.end());
+    hid_api_log_lvl = (blhost2hid_log_levels.count(blhostlvl) > 0)
+                    ? blhost2hid_log_levels.at(blhostlvl)
+                    : HID_API_LOG_ERROR;
 
-    if (!init())
-    {
-        if (m_path.empty())
-        {
-            throw std::runtime_error(
-                format_string("Error: UsbHidPeripheral() cannot open USB HID device (vid=0x%04x, pid=0x%04x, sn=%s).",
-                              vendor_id, product_id, s.c_str()));
-        }
-        else
-        {
-            throw std::runtime_error(
-                format_string("Error: UsbHidPeripheral() cannot open USB HID device (path=%s).", m_path.c_str()));
-        }
+    if (!init()) {
+        throw std::runtime_error(format_string("ERROR: UsbHidPeripheral() cannot open USB HID device (%s)\n", cfg.formatted().c_str()));
     }
+
+    hid_api_log_lvl = HID_API_LOG_ERROR;
 }
 
 // See UsbHidPeripheral.h for documentation of this method.
 bool UsbHidPeripheral::init()
 {
-    // Open the device using the VID, PID,
-    // and optionally the Serial number.
-    if (m_path.empty())
-    {
-        m_device = hid_open(m_vendor_id, m_product_id, m_serial_number.c_str());
-    }
-    else
-    {
-        std::string path = m_path;
-#if defined(WIN32)
-        // if not start with string "\\\\.\\", then add it.
-        if ((path.find("\\\\.\\") != 0) && (path.find("\\\\?\\") != 0))
-        {
-            // Add the prefix string.
-            path = "\\\\.\\" + path;
-        }
+    hid_device_cfg hid_cfg;
 
-        // Replace all '\\' with '#', except the 4 prefix characters.
-        while (path.find('\\', 4) != std::string::npos)
-        {
-            path.replace(path.find('\\', 4), 1, "#");
-        }
+    hid_cfg.bdi.bus = this->cfg.bdi.bus;
+    hid_cfg.bdi.device = this->cfg.bdi.device;
+    hid_cfg.bdi.interface = this->cfg.bdi.interface;
+    hid_cfg.bdi.valid = this->cfg.bdi.valid;
 
-        // if not end with string "#{4d1e55b2-f16f-11cf-88cb-001111000030}", then add it.
-        if (path.find("#{4d1e55b2-f16f-11cf-88cb-001111000030}") !=
-            (path.length() - sizeof("#{4d1e55b2-f16f-11cf-88cb-001111000030}") + 1 /*Add line terminator back*/))
-        {
-            path.append("#{4d1e55b2-f16f-11cf-88cb-001111000030}");
-        }
-#endif
-#if _DEBUG
-        Log::info("USB Device Path = %s.\n", path.c_str());
-#endif
-        m_device = hid_open_path(path.c_str());
-    }
+    hid_cfg.id.vendor_id = this->cfg.usb_id.vendor_id;
+    hid_cfg.id.product_id = this->cfg.usb_id.product_id;
+    hid_cfg.id.valid = this->cfg.usb_id.valid;
+
+    m_device = hid_open(&hid_cfg);
     if (!m_device)
     {
         return false;

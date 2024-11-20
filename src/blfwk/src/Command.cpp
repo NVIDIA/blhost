@@ -329,6 +329,18 @@ StatusMessageTableEntry blfwk::g_statusCodes[] = {
 ////////////////////////////////////////////////////////////////////////////////
 
 // See host_command.h for documentation of this method.
+// Releant NV commands:
+// reset                (kCommand_Reset)
+// get-property         (kCommand_GetProperty)
+//      args: <property>
+//      properties: security-state, unique-device-id
+// flash-erase-all      (kCommandFlashEraseAll)
+// receive-sb-file      (kCommand_ReceiveSbFile)
+//      args: <sb file>
+// efuse-program-once   (kCommand_EfuseProgramOnce)
+//      args: <fuse idx> <fuse val>
+// efuse-read-one       (kCommand_EfuseReadOnce)
+//      args: <fuse idx>
 Command *Command::create(const string_vector_t *argv)
 {
     Command *cmd;
@@ -339,6 +351,7 @@ Command *Command::create(const string_vector_t *argv)
     }
     else if (argv->at(0) == kCommand_GetProperty.name)
     {
+        // Creates the get-property command which we will use
         cmd = new GetProperty(argv);
     }
     else if (argv->at(0) == kCommand_SetProperty.name)
