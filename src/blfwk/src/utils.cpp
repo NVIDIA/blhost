@@ -170,7 +170,7 @@ bool capture_bus_device_interface(const std::string& str, std::string& bus, std:
     const std::regex bdi_without_interface_regex(sstream.str());
 
     // matches [hex]:[hex].[hex]
-    sstream << "." << matches_hex_literal;
+    sstream << "\\." << matches_hex_literal;
     const std::regex bdi_with_iface_regex(sstream.str());
 
     std::smatch match;

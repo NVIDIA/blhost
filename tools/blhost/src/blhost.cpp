@@ -499,7 +499,7 @@ status_t BlHost::process_usb_id_option(const char* optarg) {
         return STATUS_ERROR;
     }
 
-    DEBUGLN("Processed USB ID as %s", usb_id.formatted().c_str());
+    DEBUG2LN("Processed USB ID as %s", usb_id.formatted().c_str());
 
     usb_id.valid = true;
     return STATUS_OK;
@@ -539,7 +539,7 @@ status_t BlHost::process_usb_bus_dev_option(const char* optarg) {
         return STATUS_ERROR;
     }
 
-    DEBUGLN("Processed USB bus:device.interface as %s", bdi.formatted().c_str());
+    DEBUG2LN("Processed USB bus:device.interface as %s", bdi.formatted().c_str());
 
     bdi.valid = true;
     return STATUS_OK;
