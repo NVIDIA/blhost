@@ -137,6 +137,7 @@ namespace nv_utils {
 // (?:0x)? matches 0 or 1 of `0x` without capturing it
 // [A-Fa-f0-9]+ matches a hexadecimal literal with at least one digit
 const std::string matches_hex_literal{"(?:0x)?[A-Fa-f0-9]+"};
+const std::string matches_decimal_literal("[0-9]+");
 
 // [:,]{1} matches 1 of : or ,
 const std::string matches_separator_captured{"([:,]{1})"};
@@ -165,12 +166,12 @@ bool capture_vendor_product_id(const std::string& str, std::string& vidstr, std:
 bool capture_bus_device_interface(const std::string& str, std::string& bus, std::string& device, std::string& interface) {
     std::stringstream sstream;
 
-    // Matches [hex]:[hex]
-    sstream << matches_hex_literal << matches_separator_captured << matches_hex_literal;
+    // Matches [decimal]:[decimal]
+    sstream << matches_decimal_literal << matches_separator_captured << matches_decimal_literal;
     const std::regex bdi_without_interface_regex(sstream.str());
 
-    // matches [hex]:[hex].[hex]
-    sstream << "\\." << matches_hex_literal;
+    // matches [decimal]:[decimal].[decimal]
+    sstream << "\\." << matches_decimal_literal;
     const std::regex bdi_with_iface_regex(sstream.str());
 
     std::smatch match;

@@ -482,7 +482,9 @@ err:
 static char *make_bus_device_path(libusb_device *dev, int interface_number)
 {
 	char str[64];
-	snprintf(str, sizeof(str), "%04x:%04x:%02x",
+	// LSUSB uses decimal numbers for bus and device numebr... not sure why they were using hex here
+	// snprintf(str, sizeof(str), "%04x:%04x:%02x",
+	snprintf(str, sizeof(str), "%03u:%03u.%02u",
 		libusb_get_bus_number(dev),
 		libusb_get_device_address(dev),
 		interface_number);
@@ -924,7 +926,7 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 		libusb_get_device_descriptor(usb_dev, &desc);
 
 		DEBUG2LN(
-			"Found Candidate USB Device (%04x:%04x) (Bus %03x Device %03x)",
+			"Found Candidate USB Device (%04x:%04x) (Bus %03u Device %03u)",
 			desc.idVendor,
 			desc.idProduct,
 			libusb_get_bus_number(usb_dev),
