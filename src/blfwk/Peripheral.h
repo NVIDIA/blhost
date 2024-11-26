@@ -32,10 +32,10 @@ struct NV_UsbBDI {
     bool valid = false; // no std::optional :(
 
     std::string formatted() const {
-        constexpr size_t len = sizeof("xxxx:xxxx.xx");
+        constexpr size_t len = sizeof("xxx:xxx.xx");
         char cstr[len];
 
-        snprintf(cstr, len, "%04x:%04x.%02x", bus, device, interface);
+        snprintf(cstr, len, "%03u:%03u.%02u", bus, device, interface);
         return std::string{cstr};
     }
 };

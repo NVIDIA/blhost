@@ -477,37 +477,37 @@ void BlHost::displayProgress(int percentage, int segmentIndex, int segmentCount)
 
 status_t BlHost::process_usb_id_option(const char* optarg) {
     if (optarg == NULL) {
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
     std::string vidstr;
     std::string pidstr;
     if (!nv_utils::capture_vendor_product_id(std::string{optarg}, vidstr, pidstr)) {
         ERRORLN("--usb-id expected format is <vendor_id>:<product_id>.\n\tA comma can be used as separator, and IDs are hex literals with optional 0x prefix.");
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
     nv::NV_UsbID& usb_id = this->usb_cfg.usb_id;
 
     if (!nv_utils::str_to_uint<uint16_t>(vidstr, usb_id.vendor_id, 16)) {
         ERRORLN("Failed to parse USB vendor ID: `%s`", vidstr);
-        return STATUS_ERROR; // WHY IS 0 error????
+        return kStatus_Fail; // WHY IS 0 error????
     }
 
     if (!nv_utils::str_to_uint<uint16_t>(pidstr, usb_id.product_id, 16)) {
         ERRORLN("Failed to parse USB product ID: `%s`", pidstr);
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
     DEBUG2LN("Processed USB ID as %s", usb_id.formatted().c_str());
 
     usb_id.valid = true;
-    return STATUS_OK;
+    return kStatus_Success;
 }
 
 status_t BlHost::process_usb_bus_dev_option(const char* optarg) {
     if (optarg == NULL) {
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
     std::string busstr;
@@ -515,34 +515,34 @@ status_t BlHost::process_usb_bus_dev_option(const char* optarg) {
     std::string ifstr;
 
     if (!nv_utils::capture_bus_device_interface(std::string{optarg}, busstr, devstr, ifstr)) {
-        ERRORLN("--usb-bus-device expected format is <bus>:<device>[.<iface>]\n\tIDs are hexadecimal literals. Separators must match exactly.");
-        return STATUS_ERROR;
+        ERRORLN("--usb-bus-device expected format is <bus>:<device>[.<iface>]\n\tIDs are decimal literals. Separators must match exactly.");
+        return kStatus_Fail;
     }
 
     nv::NV_UsbBDI& bdi = this->usb_cfg.bdi;
 
-    if (!nv_utils::str_to_uint<uint8_t>(busstr, bdi.bus, 16)) {
+    if (!nv_utils::str_to_uint<uint8_t>(busstr, bdi.bus, 10)) {
         ERRORLN("Failed to parse USB bus: `%s", busstr);
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
-    if (!nv_utils::str_to_uint<uint8_t>(devstr, bdi.device, 16)) {
+    if (!nv_utils::str_to_uint<uint8_t>(devstr, bdi.device, 10)) {
         ERRORLN("Failed to parse USB device number: `%s", devstr);
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
     // default to 0 for interface (MCUs have 1 interface)
     bdi.interface = 0;
-    if (!ifstr.empty() && !nv_utils::str_to_uint<uint8_t>(ifstr, bdi.interface, 16)) {
+    if (!ifstr.empty() && !nv_utils::str_to_uint<uint8_t>(ifstr, bdi.interface, 10)) {
         ERRORLN("Failed to parse USB interface: `%s", ifstr);
         // it's optional, but if we failed to convert to int after it was provided, still bad
-        return STATUS_ERROR;
+        return kStatus_Fail;
     }
 
     DEBUG2LN("Processed USB bus:device.interface as %s", bdi.formatted().c_str());
 
     bdi.valid = true;
-    return STATUS_OK;
+    return kStatus_Success;
 }
 
 int BlHost::processOptions()
@@ -579,16 +579,16 @@ int BlHost::processOptions()
 
             case '\b':
             {
-                if (this->process_usb_bus_dev_option(optarg) == STATUS_ERROR) {
-                    return STATUS_ERROR;
+                if (this->process_usb_bus_dev_option(optarg) == kStatus_Fail) {
+                    return kStatus_Fail;
                 }
                 break;
             }
 
             case '\a':
             {
-                if (this->process_usb_id_option(optarg) == STATUS_ERROR) {
-                    return STATUS_ERROR;
+                if (this->process_usb_id_option(optarg) == kStatus_Fail) {
+                    return kStatus_Fail;
                 }
                 break;
             }
@@ -922,6 +922,8 @@ int BlHost::processOptions()
 
 int BlHost::run()
 {
+    // Why is status_t not just the same enum containing kStatus_* values???
+    // Why is it a typedef to int32 but kStatus_* are enum values... Terrible
     status_t result = kStatus_Success;
     Peripheral::PeripheralConfigData config;
     Command *cmd = NULL;
@@ -930,6 +932,7 @@ int BlHost::run()
     Bootloader *bl = NULL;
     // Read command line options.
     int optionsResult;
+    // This makes no sense... -1 here is success, but later, 0 is success. Why not just consistently use status_t??
     if ((optionsResult = processOptions()) != -1)
     {
         return optionsResult;
