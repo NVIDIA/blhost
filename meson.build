@@ -2,6 +2,9 @@ project('blhost', ['cpp', 'c'], default_options: ['cpp_std=c++11'])
 
 add_project_arguments('-DLINUX', language: 'c')
 add_project_arguments('-DLINUX', language: 'cpp')
+add_project_arguments('-D__ARM__', language: 'c')
+add_project_arguments('-D__ARM__', language: 'cpp')
+
 add_project_arguments('-DBOOTLOADER_HOST', language: 'cpp')
 add_project_arguments('-DBOOTLOADER_HOST', language: 'c')
 
