@@ -373,14 +373,11 @@ status_t SerialPacketizer::serial_packet_write(const uint8_t *packet, uint32_t b
         return status;
     }
 
-    /* Only for flash-erase-all we require this delay because MCU takes time to process this command 
-    before it can send an acknowledgement to the host */
-    if (packetType == kPacketType_Command)
-    {
-	if(framingPacket->data[0] == kCommandTag_FlashEraseAll)
-        {
-		host_delay(500);
-	}
+    /* Only for I2C we require this delay because I2C reads are timing out if host expects MCU 
+    to send acknowledgement immediately after sending a command */
+    if(m_peripheral->get_type() == Peripheral::kHostPeripheralType_I2C)	    
+    {    
+    	host_delay(500);
     }
 
     return wait_for_ack_packet();
