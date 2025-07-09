@@ -10,6 +10,7 @@ add_project_arguments('-DBOOTLOADER_HOST', language: 'c')
 
 cc = meson.get_compiler('c')
 libusb_dep = cc.find_library('usb-1.0', required: true)
+pthread_dep = dependency('threads')
 src_files = [
   'src/blfwk/src/SRecordSourceFile.cpp',
   'src/blfwk/src/StExecutableImage.cpp',
@@ -64,7 +65,7 @@ executable(
     'blhost',
     src_files,
     include_directories: inc_dirs,
-    dependencies: [libusb_dep],
+    dependencies: [libusb_dep, pthread_dep],
     install: true,
     install_dir: get_option('bindir')
 )
