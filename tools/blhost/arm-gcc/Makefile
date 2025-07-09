@@ -68,8 +68,8 @@ INCLUDES += $(BOOT_ROOT)/tools/blhost/src \
 			$(BOOT_ROOT)/src/drivers/common \
 			$(BOOT_ROOT)/src/bm_usb
 
-CXXFLAGS := -D LINUX -D BOOTLOADER_HOST -D __ARM__ -std=c++11
-CFLAGS   := -D LINUX -D BOOTLOADER_HOST -D __ARM__ -D _GNU_SOURCE -std=c99
+CXXFLAGS := -DLINUX -DBOOTLOADER_HOST -D__ARM__ -std=c++11
+CFLAGS   := -DLINUX -DBOOTLOADER_HOST -D__ARM__ -D_GNU_SOURCE -std=c99
 LIBS     :=
 
 SOURCES := $(BOOT_ROOT)/tools/blhost/src/blhost.cpp \
@@ -112,7 +112,7 @@ SOURCES := $(BOOT_ROOT)/tools/blhost/src/blhost.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/utils.cpp \
 		   $(BOOT_ROOT)/src/blfwk/src/Value.cpp \
 		   $(BOOT_ROOT)/src/crc/src/crc16.c \
-		   $(BOOT_ROOT)/src/crc/src/crc32.c 
+		   $(BOOT_ROOT)/src/crc/src/crc32.c
 
 INCLUDES := $(foreach includes, $(INCLUDES), -I $(includes))
 
@@ -236,7 +236,7 @@ $(MAKE_TARGET): $(OBJECTS_ALL)
 	@$(call printmessage,link,Linking, $(APP_NAME))
 	$(at)$(LD) $(LDFLAGS) \
           $(OBJECTS_ALL) $(LIBS) \
-          -lc -lstdc++ -lm -lusb-1.0 \
+          -lc -lstdc++ -lm -lusb-1.0 -lpthread\
           -o $@
 	@echo "Output binary:" ; echo "  $(APP_NAME)"
 

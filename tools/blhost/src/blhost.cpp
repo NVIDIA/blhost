@@ -235,7 +235,15 @@ const char k_commandUsage[] =
   fill-memory <addr> <byte_count> <pattern> [word | short | byte]\n\
                                Fill memory with pattern; size is\n\
                                word (default), short or byte\n\
-  receive-sb-file <file>       Receive SB file\n\
+  receive-sb-file <file> [--check-errors]\n\
+                               Receive SB file. Use --check-errors for error checking.\n\
+                               This flag should be used when the receive-sb-file operation\n\
+                               fails using USB interface. Without this flag USB transfer is\n\
+                               significantly faster (roughly 20x) However, the status code\n\
+                               might be misleading in case of an error. In case of an error\n\
+                               using USB interface, rerun receive-sb-file with this setting\n\
+                               for clearer error message. This setting has no effect on\n\
+                               interfaces other than USB.\n\
   execute <addr> <arg> <stackpointer>\n\
                                Execute at address with arg and stack pointer\n\
   call <addr> <arg>            Call address with arg\n\

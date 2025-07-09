@@ -2040,14 +2040,41 @@ void FillMemory::sendTo(Packetizer &device)
 // ReceiveSbFile command
 ////////////////////////////////////////////////////////////////////////////////
 
+// Static variable definition
+bool ReceiveSbFile::s_checkErrors = false;
+
+// Static method implementations
+void ReceiveSbFile::setCheckErrors(bool enableCheckErrors) {
+  s_checkErrors = enableCheckErrors;
+}
+
+bool ReceiveSbFile::getCheckErrors() { return s_checkErrors; }
+
 // See host_command.h for documentation of this method.
 bool ReceiveSbFile::init()
 {
-    if (getArgCount() != 2)
-    {
-        return false;
-    }
+  if (getArgCount() < 2 || getArgCount() > 3) {
+    return false;
+  }
+
+  // Reset check errors flag for each command
+  setCheckErrors(false);
+
+  // Parse arguments: can be either "receive-sb-file file" or "receive-sb-file
+  // --check-errors file"
+  if (getArgCount() == 2) {
+    // Format: receive-sb-file <file>
     m_dataFile = getArg(1);
+  } else if (getArgCount() == 3) {
+    // Format: receive-sb-file --check-errors <file>
+    if (getArg(1) == "--check-errors") {
+      setCheckErrors(true);
+      m_dataFile = getArg(2);
+    } else {
+      return false; // Invalid argument
+    }
+  }
+
     return true;
 }
 
@@ -2099,18 +2126,19 @@ void ReceiveSbFile::sendTo(Packetizer &device)
     }
 
     // Send data packets.
-#if !(defined(BL_FEATURE_RECEIVE_SB_FILE_CMD_PERF_IMP) && (BL_FEATURE_RECEIVE_SB_FILE_CMD_PERF_IMP == 1))
-    /*
-     * If the SB file used for the target doesn't contain any JUMP(EXECUTE), CALL or RESET command.
-     * The macro BL_FEATURE_RECEIVE_SB_FILE_CMD_PERF_IMP can be set to improve the transformation performance.
-     */
-    device.setAbortEnabled(true);
-#endif
+    if (getCheckErrors()) {
+      /*
+       * Enable error checking for receive-sb-file operations.
+       * This provides clearer error messages but is significantly slower
+       * (roughly 20x) especially on USB interfaces.
+       */
+      device.setAbortEnabled(true);
+    }
     blfwk::DataPacket dataPacket(&dataProducer, packetSizeInBytes);
     processResponse(dataPacket.sendTo(device, &bytesWritten, m_progress));
-#if !(defined(BL_FEATURE_RECEIVE_SB_FILE_CMD_PERF_IMP) && (BL_FEATURE_RECEIVE_SB_FILE_CMD_PERF_IMP == 1))
-    device.setAbortEnabled(false);
-#endif
+    if (getCheckErrors()) {
+      device.setAbortEnabled(false);
+    }
 
     // Format the command transfer details.
     m_responseDetails = format_string("Wrote %d of %d bytes.", bytesWritten, bytesToWrite);

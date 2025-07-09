@@ -1401,7 +1401,14 @@ public:
     //! @brief Send command to packetizer.
     virtual void sendTo(Packetizer &packetizer);
 
-protected:
+    //! @brief Set the check-errors option for error checking during SB file
+    //! transfer.
+    static void setCheckErrors(bool enableCheckErrors);
+
+    //! @brief Get the current check-errors option state.
+    static bool getCheckErrors();
+
+  protected:
     //! @brief Check response packet.
     virtual bool processResponse(const uint8_t *packet)
     {
@@ -1411,6 +1418,9 @@ protected:
 
 protected:
     std::string m_dataFile; //!< SB file path.
+
+  private:
+    static bool s_checkErrors; //!< Static flag for error checking option.
 };
 
 /*!
