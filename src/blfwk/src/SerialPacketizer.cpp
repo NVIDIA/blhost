@@ -372,14 +372,7 @@ status_t SerialPacketizer::serial_packet_write(const uint8_t *packet, uint32_t b
     {
         return status;
     }
-
-    /* Only for I2C we require this delay because I2C reads are timing out if host expects MCU 
-    to send acknowledgement immediately after sending a command */
-    if(m_peripheral->get_type() == Peripheral::kHostPeripheralType_I2C)	    
-    {    
-    	host_delay(500);
-    }
-
+    
     return wait_for_ack_packet();
 }
 
@@ -587,6 +580,20 @@ status_t SerialPacketizer::read_start_byte(framing_header_t *header)
             {
                 return kStatus_Success;
             }
+            // For I2C, if we read a known packet type byte (0xa1-0xa7), we likely missed the start byte 0x5a.
+            // Store the packet type and return success - read_header() will handle it.
+            if (m_peripheral->get_type() == Peripheral::kHostPeripheralType_I2C)
+            {
+                uint8_t byte = header->startByte;
+                if (byte >= kFramingPacketType_Ack && byte <= kFramingPacketType_PingResponse)
+                {
+                    // We missed the start byte, but got the packet type. Set start byte and return.
+                    // read_header() will see the packet type is already set and won't read it again.
+                    header->startByte = kFramingPacketStartByte;
+                    header->packetType = byte; // Store the packet type we read
+                    return kStatus_Success;
+                }
+            }
         }
 
         // This will keep us from doing non necessary delays in case the byte received
@@ -611,6 +618,18 @@ status_t SerialPacketizer::read_header(framing_header_t *header)
     if (status != kStatus_Success)
     {
         return status;
+    }
+
+    // If read_start_byte() already set the packet type (because we missed the start byte),
+    // don't read it again. Otherwise, read the packet type normally.
+    // Check if packet type is in valid range (0xa1-0xa7) to see if it was already set
+    if (m_peripheral->get_type() == Peripheral::kHostPeripheralType_I2C)
+    {
+        if (header->packetType >= kFramingPacketType_Ack && header->packetType <= kFramingPacketType_PingResponse)
+        {
+            // Packet type was already set by read_start_byte() - we're good
+            return kStatus_Success;
+        }
     }
 
     return m_peripheral->read(&header->packetType, sizeof(header->packetType), NULL,
