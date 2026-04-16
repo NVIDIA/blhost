@@ -613,6 +613,10 @@ status_t SerialPacketizer::read_start_byte(framing_header_t *header)
 // See SerialPacketizer.h for documentation on this function.
 status_t SerialPacketizer::read_header(framing_header_t *header)
 {
+    // Clear so the I2C "already-consumed packet type" signal below isn't tripped by
+    // uninitialized stack memory from the caller's header struct.
+    header->packetType = 0;
+
     // Wait for start byte.
     status_t status = read_start_byte(header);
     if (status != kStatus_Success)
