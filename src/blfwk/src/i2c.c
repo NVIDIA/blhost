@@ -104,7 +104,7 @@ int i2c_read(int fd, char *buf, int size)
 {
     int ret = -1;
 
-    i2c_set_timeout(fd, 500);
+    i2c_set_timeout(fd, 200);
     if ((fd < 0) || (i2c_data.msgs == NULL))
     {
         return 0;
